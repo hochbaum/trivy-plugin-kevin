@@ -27,7 +27,7 @@ func main() {
 	var report types.Report
 
 	if err := json.NewDecoder(os.Stdin).Decode(&report); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to decode trivy report: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to decode trivy report: %v\n. did you use json output?", err)
 		os.Exit(1)
 	}
 
