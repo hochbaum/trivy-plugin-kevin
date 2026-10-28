@@ -3,7 +3,11 @@ module github.com/hochbaum/trivy-plugin-kevin
 go 1.27.2
 
 require (
-	github.com/aquasecurity/trivy v0.76.1 // indirect
+	github.com/aquasecurity/trivy v0.76.1
+	github.com/stretchr/testify v1.12.1
+)
+
+require (
 	github.com/aquasecurity/trivy-db v0.0.0-20261012084708-cbebf2ecd6df // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/google/go-containerregistry v0.22.1 // indirect
@@ -15,6 +19,7 @@ require (
 	github.com/samber/oops v1.18.1 // indirect
 	go.opentelemetry.io/otel v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 )

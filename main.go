@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 
 	"github.com/aquasecurity/trivy/pkg/types"
@@ -24,29 +26,47 @@ type EnrichedReport struct {
 }
 
 func main() {
+	fetch := func() (*KevDatabase, error) {
+		return readKevDatabase(http.DefaultClient, KevDbUrl)
+	}
+
+	if err := run(os.Stdin, os.Stdout, fetch); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run(in io.Reader, out io.Writer, fetch func() (*KevDatabase, error)) error {
 	var report types.Report
 
-	if err := json.NewDecoder(os.Stdin).Decode(&report); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to decode trivy report: %v\n. did you use json output?", err)
-		os.Exit(1)
+	if err := json.NewDecoder(in).Decode(&report); err != nil {
+		return fmt.Errorf("failed to decode trivy report: %w. did you use json output?", err)
 	}
+
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
 
 	if len(report.Results) == 0 {
-		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "failed to encode trivy report: %v\n", err)
-			os.Exit(1)
+		if err := enc.Encode(report); err != nil {
+			return fmt.Errorf("failed to encode trivy report: %w", err)
 		}
-		os.Exit(0)
+		return nil
 	}
 
-	db, err := readKevDatabase()
+	db, err := fetch()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to retrieve kev database: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to retrieve kev database: %w", err)
 	}
 
 	db.createLookup()
 
+	if err := enc.Encode(enrich(report, db)); err != nil {
+		return fmt.Errorf("failed to encode enriched trivy report: %w", err)
+	}
+	return nil
+}
+
+func enrich(report types.Report, db *KevDatabase) EnrichedReport {
 	enrichedResults := make([]EnrichedResult, len(report.Results))
 	for i, result := range report.Results {
 		enrichedResults[i] = EnrichedResult{
@@ -64,15 +84,8 @@ func main() {
 		}
 	}
 
-	enrichedReport := EnrichedReport{
+	return EnrichedReport{
 		Report:  report,
 		Results: enrichedResults,
-	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-
-	if err := enc.Encode(enrichedReport); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to encode enriched trivy report: %v\n", err)
-		os.Exit(1)
 	}
 }

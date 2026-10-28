@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -44,9 +45,8 @@ func (db *KevDatabase) createLookup() {
 	}
 }
 
-func readKevDatabase() (*KevDatabase, error) {
-	client := http.Client{}
-	req, err := http.NewRequest("GET", KevDbUrl, nil)
+func readKevDatabase(client *http.Client, url string) (*KevDatabase, error) {
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +56,10 @@ func readKevDatabase() (*KevDatabase, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status %s", resp.Status)
+	}
 
 	db := new(KevDatabase)
 	return db, json.NewDecoder(resp.Body).Decode(db)
