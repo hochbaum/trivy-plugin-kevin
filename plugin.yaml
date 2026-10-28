@@ -3,10 +3,7 @@ version: 0.0.1
 repository: github.com/hochbaum/trivy-plugin-kevin
 maintainer: Linus Hochbaum
 output: true
-summary: |-
-  This Trivy plugin allows you to enrich the scan result
-  with data from the Known Exploited Vulnerability (KEV)
-  database.
+summary: Enrich JSON scan results with data from the Known Exploited Vulnerability (KEV) database.
 
 platforms:
   - selector:
