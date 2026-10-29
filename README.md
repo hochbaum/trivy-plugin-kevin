@@ -43,3 +43,14 @@ You will then notice that the vulnerabilities are enriched with a `KEV` node, in
     ]
   }
 ```
+
+## Offline usage
+
+To enrich scan results without an internet connection, point the plugin at a local copy of the KEV database using `--kev-db` (passed through Trivy's `--output-plugin-arg`):
+
+```shell
+curl -fsSL -o kev.json https://raw.githubusercontent.com/cisagov/kev-data/refs/heads/develop/known_exploited_vulnerabilities.json
+trivy image -f json --output plugin=kevin --output-plugin-arg "--kev-db ./kev.json" ghcr.io/christophetd/log4shell-vulnerable-app
+```
+
+The local file must use the same JSON schema as the online catalog. When `--kev-db` is set, the online catalog is never fetched: if the file is missing, unreadable, or invalid, the plugin exits with an error. Without `--kev-db`, the plugin fetches the online catalog as before.

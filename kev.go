@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -61,6 +63,24 @@ func readKevDatabase(client *http.Client, url string) (*KevDatabase, error) {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
+	return decodeKevDatabase(resp.Body)
+}
+
+func decodeKevDatabase(r io.Reader) (*KevDatabase, error) {
 	db := new(KevDatabase)
-	return db, json.NewDecoder(resp.Body).Decode(db)
+	return db, json.NewDecoder(r).Decode(db)
+}
+
+func readKevDatabaseFromFile(path string) (*KevDatabase, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open local kev database %q: %w", path, err)
+	}
+	defer f.Close()
+
+	db, err := decodeKevDatabase(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse local kev database %q: %w", path, err)
+	}
+	return db, nil
 }

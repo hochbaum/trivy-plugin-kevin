@@ -3,6 +3,8 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -168,4 +170,49 @@ func TestCreateLookup(t *testing.T) {
 		assert.NotContains(t, db.lookup, "CVE-2021-44228")
 		assert.Contains(t, db.lookup, "CVE-2014-0160")
 	})
+}
+
+func TestReadKevDatabaseFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kev.json")
+	require.NoError(t, os.WriteFile(path, []byte(kevFixture), 0o600))
+
+	db, err := readKevDatabaseFromFile(path)
+	require.NoError(t, err)
+
+	assert.Equal(t, "CISA Catalog of Known Exploited Vulnerabilities", db.Title)
+	assert.Equal(t, "2026.10.27", db.CatalogVersion)
+	assert.Equal(t, 2, db.Count)
+	require.Len(t, db.Vulnerabilities, 2)
+
+	db.createLookup()
+	assert.Equal(t, "Log4j2", db.lookup["CVE-2021-44228"].Product)
+	assert.Equal(t, "OpenSSL", db.lookup["CVE-2014-0160"].Product)
+}
+
+func TestReadKevDatabaseFromFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	invalid := filepath.Join(dir, "invalid.json")
+	require.NoError(t, os.WriteFile(invalid, []byte("<html>not json</html>"), 0o600))
+	empty := filepath.Join(dir, "empty.json")
+	require.NoError(t, os.WriteFile(empty, nil, 0o600))
+	missing := filepath.Join(dir, "missing.json")
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr string
+	}{
+		{name: "missing file", path: missing, wantErr: "failed to open local kev database"},
+		{name: "invalid json", path: invalid, wantErr: "invalid character"},
+		{name: "empty file", path: empty, wantErr: "EOF"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := readKevDatabaseFromFile(tt.path)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Contains(t, err.Error(), tt.path, "error must name the offending file")
+		})
+	}
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,13 +28,61 @@ type EnrichedReport struct {
 }
 
 func main() {
-	fetch := func() (*KevDatabase, error) {
-		return readKevDatabase(http.DefaultClient, KevDbUrl)
+	kevDBPath, err := parseArgs(os.Args[1:])
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printUsage(os.Stdout)
+			return
+		}
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		printUsage(os.Stderr)
+		os.Exit(2)
 	}
 
-	if err := run(os.Stdin, os.Stdout, fetch); err != nil {
+	if err := run(os.Stdin, os.Stdout, fetchFunc(kevDBPath)); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+}
+
+func parseArgs(args []string) (string, error) {
+	fs := flag.NewFlagSet("trivy-plugin-kevin", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	kevDB := fs.String("kev-db", "", "path to a local KEV database JSON file; when set, the online catalog is not fetched")
+	if err := fs.Parse(args); err != nil {
+		return "", err
+	}
+	if fs.NArg() > 0 {
+		return "", fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "kev-db" {
+			set = true
+		}
+	})
+	if set && *kevDB == "" {
+		return "", errors.New("--kev-db requires a non-empty path")
+	}
+	return *kevDB, nil
+}
+
+func printUsage(w io.Writer) {
+	_, _ = fmt.Fprintf(w, "usage: trivy-plugin-kevin [--kev-db <path>]\n\n")
+	_, _ = fmt.Fprintln(w, "Reads a Trivy JSON report from stdin and writes the report enriched")
+	_, _ = fmt.Fprintln(w, "with KEV (Known Exploited Vulnerabilities) data to stdout.")
+	_, _ = fmt.Fprintln(w, "\nflags:")
+	_, _ = fmt.Fprintln(w, "  --kev-db <path>   use a local KEV database JSON file instead of fetching the online catalog")
+}
+
+func fetchFunc(kevDBPath string) func() (*KevDatabase, error) {
+	if kevDBPath != "" {
+		return func() (*KevDatabase, error) {
+			return readKevDatabaseFromFile(kevDBPath)
+		}
+	}
+	return func() (*KevDatabase, error) {
+		return readKevDatabase(http.DefaultClient, KevDbUrl)
 	}
 }
 

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -237,4 +240,79 @@ func TestRunWriteError(t *testing.T) {
 			assert.Contains(t, err.Error(), "disk full")
 		})
 	}
+}
+
+func TestParseArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		want    string
+		wantErr string
+	}{
+		{name: "no args means online fetch", args: nil, want: ""},
+		{name: "flag with separate value", args: []string{"--kev-db", "kev.json"}, want: "kev.json"},
+		{name: "flag with equals value", args: []string{"--kev-db=kev.json"}, want: "kev.json"},
+		{name: "single dash form", args: []string{"-kev-db", "kev.json"}, want: "kev.json"},
+		{name: "empty value is an error", args: []string{"--kev-db="}, wantErr: "non-empty path"},
+		{name: "missing value", args: []string{"--kev-db"}, wantErr: "flag needs an argument"},
+		{name: "unknown flag", args: []string{"--kevdb", "kev.json"}, wantErr: "not defined"},
+		{name: "extra positional arg", args: []string{"kev.json"}, wantErr: "unexpected argument"},
+		{name: "positional after flag", args: []string{"--kev-db", "kev.json", "extra"}, wantErr: "unexpected argument"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseArgs(tt.args)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParseArgsHelp(t *testing.T) {
+	for _, args := range [][]string{{"-h"}, {"--help"}} {
+		_, err := parseArgs(args)
+		assert.ErrorIs(t, err, flag.ErrHelp, "args %v", args)
+	}
+}
+
+func TestRunWithLocalKevFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kev.json")
+	require.NoError(t, os.WriteFile(path, []byte(kevFixture), 0o600))
+
+	var out bytes.Buffer
+	require.NoError(t, run(strings.NewReader(reportFixture), &out, fetchFunc(path)))
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	results := got["Results"].([]any)
+	jar := results[0].(map[string]any)
+	vulns := jar["Vulnerabilities"].([]any)
+
+	log4shell := vulns[0].(map[string]any)
+	kev := log4shell["KEV"].(map[string]any)
+	assert.Equal(t, "CVE-2021-44228", kev["cveID"])
+	assert.Equal(t, "Apache", kev["vendorProject"])
+	assert.Equal(t, "Log4j2", kev["product"])
+
+	other := vulns[1].(map[string]any)
+	assert.NotContains(t, other, "KEV", "CVE-2021-45046 is not in the fixture database")
+}
+
+func TestRunWithMissingLocalKevFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.json")
+
+	var out bytes.Buffer
+	err := run(strings.NewReader(reportFixture), &out, fetchFunc(path))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to retrieve kev database")
+	assert.Contains(t, err.Error(), "failed to open local kev database")
+	assert.Contains(t, err.Error(), path)
+	assert.Empty(t, out.String())
 }

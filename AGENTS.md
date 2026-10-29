@@ -24,6 +24,7 @@ Usage: `trivy image -f json --output plugin=kevin <image>`
 - Vet/fmt: `go vet ./...`, `gofmt -l .`
 - Install locally: `make && make install`
 - Manual smoke test: `trivy image -f json --output plugin=kevin ghcr.io/christophetd/log4shell-vulnerable-app`
+- Offline: pass a local KEV catalog via `trivy image -f json --output plugin=kevin --output-plugin-arg "--kev-db ./kev.json" <image>` (save it first with `curl -fsSL -o kev.json <KevDbUrl>`)
 
 ## Conventions & invariants
 - Keep output a valid Trivy report: embed `types.Report`/`types.Result`/
@@ -39,6 +40,10 @@ Usage: `trivy image -f json --output plugin=kevin <image>`
   inline JSON fixtures, inject dependencies as function params (see `fetch`).
 - `KevDbUrl` must stay on the GitHub mirror of cisagov/kev-data: CISA's own
   download endpoint blocks headless/proxied requests (see code comment).
+- `--kev-db <path>` (plugin argv, via trivy's `--output-plugin-arg`) loads a
+  local KEV catalog file instead of fetching `KevDbUrl`. When set, never fall
+  back to the network: a missing/invalid file is a hard error. `--kev-db=`
+  (empty) is an error; unknown flags/extra args print usage and exit non-zero.
 
 ## Notes
 - Toy plugin: only linux/amd64 in `plugin.yaml` for now; multi-platform later.
