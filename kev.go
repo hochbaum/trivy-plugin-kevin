@@ -67,8 +67,10 @@ func readKevDatabase(client *http.Client, url string) (*KevDatabase, error) {
 }
 
 func decodeKevDatabase(r io.Reader) (*KevDatabase, error) {
+	const maxKevDbSize = 10 * 1024 * 1024
 	db := new(KevDatabase)
-	return db, json.NewDecoder(r).Decode(db)
+	limitReader := io.LimitReader(r, maxKevDbSize)
+	return db, json.NewDecoder(limitReader).Decode(db)
 }
 
 func readKevDatabaseFromFile(path string) (*KevDatabase, error) {

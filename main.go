@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
+	"time"
 
 	"github.com/aquasecurity/trivy/pkg/types"
 )
@@ -81,9 +83,17 @@ func fetchFunc(kevDBPath string) func() (*KevDatabase, error) {
 			return readKevDatabaseFromFile(kevDBPath)
 		}
 	}
+
+	client := &http.Client{Timeout: time.Second * 10}
 	return func() (*KevDatabase, error) {
-		return readKevDatabase(http.DefaultClient, KevDbUrl)
+		return readKevDatabase(client, KevDbUrl)
 	}
+}
+
+func hasVulnerability(report types.Report) bool {
+	return slices.ContainsFunc(report.Results, func(r types.Result) bool {
+		return len(r.Vulnerabilities) > 0
+	})
 }
 
 func run(in io.Reader, out io.Writer, fetch func() (*KevDatabase, error)) error {
@@ -96,7 +106,8 @@ func run(in io.Reader, out io.Writer, fetch func() (*KevDatabase, error)) error 
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 
-	if len(report.Results) == 0 {
+	// skip fetching the database if no vulnerability is present
+	if !hasVulnerability(report) {
 		if err := enc.Encode(report); err != nil {
 			return fmt.Errorf("failed to encode trivy report: %w", err)
 		}
